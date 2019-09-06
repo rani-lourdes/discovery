@@ -1,0 +1,14 @@
+server:
+  port: 8010
+
+management:
+  server:
+    port: 8011
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics
+
+spring:
+  application:
+    name: Message

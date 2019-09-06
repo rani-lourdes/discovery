@@ -1,0 +1,26 @@
+server:
+  port: 8000
+
+management:
+  server:
+    port: 8001
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics
+
+spring:
+  application:
+    name: Welcome
+
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 5000
+        loggerLevel: basic
+
+app:
+  feign:
+    url: http://localhost:8010/
