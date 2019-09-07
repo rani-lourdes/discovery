@@ -1,0 +1,14 @@
+version: '3'
+services:
+  message:
+    image: asakchris/aws-service-discovery-message:1.0-SNAPSHOT
+    ports:
+      - 8010:8010
+      - 8011:8100
+  welcome:
+    image: asakchris/aws-service-discovery-welcome:1.0-SNAPSHOT
+    environment:
+      - APP_FEIGN_URL=http://message:8010/
+    ports:
+      - 8000:8000
+      - 8001:8001

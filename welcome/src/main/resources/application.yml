@@ -23,4 +23,4 @@ feign:
 
 app:
   feign:
-    url: http://localhost:8010/
+    url: ${APP_FEIGN_URL:http://localhost:8010/}
