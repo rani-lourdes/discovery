@@ -57,6 +57,16 @@ Resources:
       FromPort: 8000
       ToPort: 8001
       SourceSecurityGroupId: !Ref 'LoadBalancerSG'
+  # Allow traffic from one container into another, so that welcome service can reach message service using service discovery DNS URL
+  ContainerSecurityGroupIngressFromSelf:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Ingress from other containers in the same security group
+      GroupId: !Ref 'ContainerSecurityGroup'
+      IpProtocol: tcp
+      FromPort: 8000
+      ToPort: 8000
+      SourceSecurityGroupId: !Ref 'ContainerSecurityGroup'
 
   # Application load balancer for getting traffic to containers
   AppLoadBalancer:
@@ -110,7 +120,7 @@ Resources:
       Port: 8000
       Protocol: HTTP
       VpcId: !Ref VpcId
-  AppLoadBalancerRule:
+  WelcomeLoadBalancerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
       Actions:
@@ -137,7 +147,7 @@ Resources:
       Port: 8000
       Protocol: HTTP
       VpcId: !Ref VpcId
-  AppLoadBalancerRule:
+  MessageLoadBalancerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
       Actions:
@@ -265,7 +275,7 @@ Resources:
   MessagePrivateNamespace:
     Type: AWS::ServiceDiscovery::PrivateDnsNamespace
     Properties:
-      Name: messageNamespace
+      Name: messageSvcNamespace
       Vpc: !Ref VpcId
   # Service discovery for message service, DnsConfig property specifies the DNS records that are automatically created
   # in Amazon Route 53 when your Amazon ECS task is registered with the service discovery service
@@ -282,8 +292,8 @@ Resources:
             Type: A
           - TTL: 60
             Type: SRV
-        HealthCheckCustomConfig:
-          FailureThreshold: 1
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
   # Metadata description of what message container to run and what resource requirements it has
   MessageTaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -314,6 +324,7 @@ Resources:
   # as well as monitor the number of running tasks and replace any that have crashed
   MessageECSService:
     Type: AWS::ECS::Service
+    DependsOn: MessageLoadBalancerRule
     Properties:
       ServiceName: MESSAGE-SERVICE
       Cluster: !Ref ECSCluster
@@ -359,7 +370,7 @@ Resources:
         - ContainerPort: 8001
         Environment:
         - Name: APP_FEIGN_URL
-          Value: http://messageService.messageNamespace:8010/
+          Value: http://messageservice.messagesvcnamespace:8000/
         LogConfiguration:
           LogDriver: awslogs
           Options:
@@ -370,6 +381,7 @@ Resources:
   # as well as monitor the number of running tasks and replace any that have crashed
   WelcomeECSService:
     Type: AWS::ECS::Service
+    DependsOn: WelcomeLoadBalancerRule
     Properties:
       ServiceName: WELCOME-SERVICE
       Cluster: !Ref ECSCluster

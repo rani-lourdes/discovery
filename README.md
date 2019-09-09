@@ -41,3 +41,25 @@ Welcome Service
 http://localhost:8000/welcome
 http://localhost:8001/actuator/health
 ```
+
+### Deploy in AWS ECS
+###### Create new VPC, 2 public subnet and 2 private subnet
+```
+aws cloudformation create-stack --stack-name TEST-VPC --template-body file://vpc.yml
+```
+
+###### Deploy application in ECS cluster
+When message service container comes up, it goes and register in AWS service discovery and it can be accessed using 'messageservice.messagesvcnamespace' in the same VPC.
+```
+aws cloudformation create-stack --stack-name SERVICE-DISCOVERY-POC --template-body file://service.yml \
+    --capabilities CAPABILITY_IAM --capabilities CAPABILITY_NAMED_IAM \
+    --parameters ParameterKey=VpcId,ParameterValue=vpc-04b5f586912f6e67a \
+    ParameterKey=PublicSubnetList,ParameterValue='subnet-001e1add5308ff72b,subnet-054d1b907ea79888d' \
+    ParameterKey=PrivateSubnetList,ParameterValue='subnet-0e3828ad73474e9d7,subnet-01c96c275af4932be'
+```
+
+###### Invoke services using ALB
+```
+http://APP-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/welcome
+http://APP-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/message
+```
