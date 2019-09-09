@@ -53,9 +53,9 @@ When message service container comes up, it goes and register in AWS service dis
 ```
 aws cloudformation create-stack --stack-name SERVICE-DISCOVERY-POC --template-body file://service.yml \
     --capabilities CAPABILITY_IAM --capabilities CAPABILITY_NAMED_IAM \
-    --parameters ParameterKey=VpcId,ParameterValue=vpc-04b5f586912f6e67a \
-    ParameterKey=PublicSubnetList,ParameterValue='subnet-001e1add5308ff72b,subnet-054d1b907ea79888d' \
-    ParameterKey=PrivateSubnetList,ParameterValue='subnet-0e3828ad73474e9d7,subnet-01c96c275af4932be'
+    --parameters ParameterKey=VpcId,ParameterValue=vpc-XXXXXXXXXXXX \
+    ParameterKey=PublicSubnetList,ParameterValue='subnet-XXXXXXXXXXXX,subnet-XXXXXXXXXXXX' \
+    ParameterKey=PrivateSubnetList,ParameterValue='subnet-XXXXXXXXXXXX,subnet-XXXXXXXXXXXX'
 ```
 
 ###### Invoke services using ALB
