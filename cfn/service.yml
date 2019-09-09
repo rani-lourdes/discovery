@@ -1,0 +1,391 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: This stack creates ECS cluster with service discovery using private DNS
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: The VPC in which Fargate container tasks run
+  PublicSubnetList:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Select at least two public subnets in given VPC to deploy ALB
+  PrivateSubnetList:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Select at least two private subnets in given VPC where Fargate run tasks
+Resources:
+  # Load balancer security group
+  LoadBalancerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: LOAD-BALANCER-SG
+      GroupDescription: Access to the public facing load balancer
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        # Allow access to ALB from anywhere on the internet
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: Allow HTTP
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIpv6: '::/0'
+          Description: Allow HTTP
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: Allow HTTPS
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIpv6: '::/0'
+          Description: Allow HTTPS
+  # Container security group
+  ContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: WELCOME-CONTAINER-SG
+      GroupDescription: Access to the welcome container
+      VpcId: !Ref VpcId
+  # Allow traffic from load balancer into container
+  ContainerSecurityGroupIngressFromALB:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Ingress from the public Load balancer
+      GroupId: !Ref 'ContainerSecurityGroup'
+      IpProtocol: tcp
+      FromPort: 8000
+      ToPort: 8001
+      SourceSecurityGroupId: !Ref 'LoadBalancerSG'
+
+  # Application load balancer for getting traffic to containers
+  AppLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: APP-ALB
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+      - Key: idle_timeout.timeout_seconds
+        Value: '60'
+      Subnets: !Ref PublicSubnetList
+      SecurityGroups: [!Ref 'LoadBalancerSG']
+  # This target group is used to setup the ALB to just drop traffic initially, before any real service target groups have been added
+  AppLoadBalancerDummyTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: APP-DUMMY-TG
+      HealthCheckIntervalSeconds: 150
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 120
+      HealthyThresholdCount: 2
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 2
+      VpcId: !Ref VpcId
+  AppLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn:
+    - AppLoadBalancer
+    Properties:
+      DefaultActions:
+      - TargetGroupArn: !Ref 'AppLoadBalancerDummyTG'
+        Type: 'forward'
+      LoadBalancerArn: !Ref 'AppLoadBalancer'
+      Port: 80
+      Protocol: HTTP
+  # When welcome container comes up, it will register in this target group
+  WelcomeTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: WELCOME-TG
+      HealthCheckIntervalSeconds: 150
+      HealthCheckPath: /actuator/health
+      HealthCheckPort: 8001
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 120
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      TargetType: ip
+      Port: 8000
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+  AppLoadBalancerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+      - TargetGroupArn: !Ref 'WelcomeTargetGroup'
+        Type: 'forward'
+      Conditions:
+      - Field: path-pattern
+        Values: ['*']
+      ListenerArn: !Ref AppLoadBalancerListener
+      Priority: 2
+  # When message container comes up, it will register in this target group
+  MessageTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: MESSAGE-TG
+      HealthCheckIntervalSeconds: 150
+      HealthCheckPath: /actuator/health
+      HealthCheckPort: 8001
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 120
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      TargetType: ip
+      Port: 8000
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+  AppLoadBalancerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+      - TargetGroupArn: !Ref 'MessageTargetGroup'
+        Type: 'forward'
+      Conditions:
+      - Field: path-pattern
+        Values: ['/message']
+      ListenerArn: !Ref AppLoadBalancerListener
+      Priority: 1
+
+  # This is an IAM role which authorizes ECS to manage resources on the account, such as updating load balancer
+  # with details of where containers are, so that traffic can reach containers.
+  ECSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ECS-ROLE
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: ECSRolePolicy
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+              # Rules which allow ECS to attach network interfaces to instances in order
+              # for awsvpc networking mode to work right
+              - 'ec2:AttachNetworkInterface'
+              - 'ec2:CreateNetworkInterface'
+              - 'ec2:CreateNetworkInterfacePermission'
+              - 'ec2:DeleteNetworkInterface'
+              - 'ec2:DeleteNetworkInterfacePermission'
+              - 'ec2:Describe*'
+              - 'ec2:DetachNetworkInterface'
+
+              # Rules which allow ECS to update load balancers with the information about
+              # how to send traffic to containers
+              - 'elasticloadbalancing:DeregisterInstancesFromLoadBalancer'
+              - 'elasticloadbalancing:DeregisterTargets'
+              - 'elasticloadbalancing:Describe*'
+              - 'elasticloadbalancing:RegisterInstancesWithLoadBalancer'
+              - 'elasticloadbalancing:RegisterTargets'
+
+              - 'ec2:Describe*'
+              - 'ec2:AuthorizeSecurityGroupIngress'
+            Resource: '*'
+
+  # This is a role which is used by the ECS tasks themselves.
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ECS-TASK-EXEC-ROLE
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs-tasks.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: ECSTaskExecutionRolePolicy
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+              # Allow the ECS Tasks to download images from ECR
+              - 'ecr:GetAuthorizationToken'
+              - 'ecr:BatchCheckLayerAvailability'
+              - 'ecr:GetDownloadUrlForLayer'
+              - 'ecr:BatchGetImage'
+
+              # Allow the ECS tasks to upload logs to CloudWatch
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+            Resource: '*'
+
+  # IAM role to give the service's containers if the code within needs to access other AWS resources
+  # like ECS tasks, S3 buckets etc
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ECS-TASK-ROLE
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: 'Allow'
+          Principal:
+            Service: [ecs-tasks.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Policies:
+      - PolicyName: ECSServiceDiscovery
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+              # Allow ECS container to access ECS tasks
+              - 'ecs:ListTasks'
+              - 'ecs:DescribeTasks'
+            Resource: '*'
+
+  # Service Discovery POC ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: SERVICE-DISCOVERY-ECS-CLUSTER
+
+  # Cloud watch log group to which welcome container send logs
+  WelcomeLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ECS/welcome'
+      RetentionInDays: 7
+  # Cloud watch log group to which message container send logs
+  MessageLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ECS/message'
+      RetentionInDays: 7
+
+  # Private namespace for message service
+  MessagePrivateNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: messageNamespace
+      Vpc: !Ref VpcId
+  # Service discovery for message service, DnsConfig property specifies the DNS records that are automatically created
+  # in Amazon Route 53 when your Amazon ECS task is registered with the service discovery service
+  MessageDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Description: Discovery Service for the message service
+      Name: messageService
+      NamespaceId: !Ref MessagePrivateNamespace
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - TTL: 60
+            Type: A
+          - TTL: 60
+            Type: SRV
+        HealthCheckCustomConfig:
+          FailureThreshold: 1
+  # Metadata description of what message container to run and what resource requirements it has
+  MessageTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: MESSAGE-TD
+      Cpu: 512
+      Memory: 1024
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+      - FARGATE
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      TaskRoleArn: !Ref ECSTaskRole
+      ContainerDefinitions:
+      - Name: MESSAGE-CONTAINER
+        Cpu: 512
+        Memory: 1024
+        Image: 'asakchris/aws-service-discovery-message:1.0-SNAPSHOT'
+        PortMappings:
+        - ContainerPort: 8000
+        - ContainerPort: 8001
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: !Ref MessageLogGroup
+            awslogs-region: !Ref AWS::Region
+            awslogs-stream-prefix: ecs
+  # Service is a resource which allows to run multiple copies of a type of task, and gather up their logs and metrics,
+  # as well as monitor the number of running tasks and replace any that have crashed
+  MessageECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: MESSAGE-SERVICE
+      Cluster: !Ref ECSCluster
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 75
+      DesiredCount: 2
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+          - !Ref ContainerSecurityGroup
+          Subnets: !Ref PrivateSubnetList
+      TaskDefinition: !Ref MessageTaskDefinition
+      LoadBalancers:
+      - ContainerName: MESSAGE-CONTAINER
+        ContainerPort: 8000
+        TargetGroupArn: !Ref MessageTargetGroup
+      ServiceRegistries:
+      - RegistryArn: !GetAtt MessageDiscoveryService.Arn
+        Port: 8000
+
+  # Metadata description of what welcome container to run and what resource requirements it has
+  WelcomeTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: WELCOME-TD
+      Cpu: 512
+      Memory: 1024
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+      - FARGATE
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      TaskRoleArn: !Ref ECSTaskRole
+      ContainerDefinitions:
+      - Name: WELCOME-CONTAINER
+        Cpu: 512
+        Memory: 1024
+        Image: 'asakchris/aws-service-discovery-welcome:1.0-SNAPSHOT'
+        PortMappings:
+        - ContainerPort: 8000
+        - ContainerPort: 8001
+        Environment:
+        - Name: APP_FEIGN_URL
+          Value: http://messageService.messageNamespace:8010/
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: !Ref WelcomeLogGroup
+            awslogs-region: !Ref AWS::Region
+            awslogs-stream-prefix: ecs
+  # Service is a resource which allows to run multiple copies of a type of task, and gather up their logs and metrics,
+  # as well as monitor the number of running tasks and replace any that have crashed
+  WelcomeECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: WELCOME-SERVICE
+      Cluster: !Ref ECSCluster
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 75
+      DesiredCount: 2
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+          - !Ref ContainerSecurityGroup
+          Subnets: !Ref PrivateSubnetList
+      TaskDefinition: !Ref WelcomeTaskDefinition
+      LoadBalancers:
+      - ContainerName: WELCOME-CONTAINER
+        ContainerPort: 8000
+        TargetGroupArn: !Ref WelcomeTargetGroup
