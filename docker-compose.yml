@@ -3,8 +3,8 @@ services:
   message:
     image: asakchris/aws-service-discovery-message:1.0-SNAPSHOT
     ports:
-      - 8010:8010
-      - 8011:8100
+      - 8000:8010
+      - 8001:8100
   welcome:
     image: asakchris/aws-service-discovery-welcome:1.0-SNAPSHOT
     environment:

@@ -12,10 +12,10 @@ public class WelcomeController {
     @Autowired
     private MessageClient messageClient;
 
-    @GetMapping(value = "welcome")
+    @GetMapping(value = "/welcome")
     public ResponseEntity<String> welcome() {
         String message = messageClient.getMessage();
-        String finalMessage = "Hello Kamaraj from " + message;
+        String finalMessage = "Hello world from " + message;
         return new ResponseEntity<>(finalMessage, HttpStatus.OK);
     }
 }
