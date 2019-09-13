@@ -130,7 +130,7 @@ Resources:
       - Field: path-pattern
         Values: ['*']
       ListenerArn: !Ref AppLoadBalancerListener
-      Priority: 2
+      Priority: 3
   # When message container comes up, it will register in this target group
   MessageTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -158,6 +158,33 @@ Resources:
         Values: ['/message']
       ListenerArn: !Ref AppLoadBalancerListener
       Priority: 1
+  # When random container comes up, it will register in this target group
+  RandomTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: RANDOM-TG
+      HealthCheckIntervalSeconds: 150
+      HealthCheckPath: /actuator/health
+      HealthCheckPort: 8001
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 120
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      TargetType: ip
+      Port: 8000
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+  RandomLoadBalancerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+      - TargetGroupArn: !Ref 'RandomTargetGroup'
+        Type: 'forward'
+      Conditions:
+      - Field: path-pattern
+        Values: ['/random']
+      ListenerArn: !Ref AppLoadBalancerListener
+      Priority: 2
 
   # This is an IAM role which authorizes ECS to manage resources on the account, such as updating load balancer
   # with details of where containers are, so that traffic can reach containers.
@@ -270,21 +297,28 @@ Resources:
     Properties:
       LogGroupName: !Sub '/ECS/message'
       RetentionInDays: 7
+  # Cloud watch log group to which random container send logs
+  RandomLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ECS/random'
+      RetentionInDays: 7
 
-  # Private namespace for message service
-  MessagePrivateNamespace:
+  # Private namespace for services
+  DemoPrivateNamespace:
     Type: AWS::ServiceDiscovery::PrivateDnsNamespace
     Properties:
-      Name: messageSvcNamespace
+      Name: my-demo-domain
       Vpc: !Ref VpcId
+
   # Service discovery for message service, DnsConfig property specifies the DNS records that are automatically created
   # in Amazon Route 53 when your Amazon ECS task is registered with the service discovery service
   MessageDiscoveryService:
     Type: AWS::ServiceDiscovery::Service
     Properties:
       Description: Discovery Service for the message service
-      Name: messageService
-      NamespaceId: !Ref MessagePrivateNamespace
+      Name: message-service
+      NamespaceId: !Ref DemoPrivateNamespace
       DnsConfig:
         RoutingPolicy: MULTIVALUE
         DnsRecords:
@@ -348,6 +382,77 @@ Resources:
       - RegistryArn: !GetAtt MessageDiscoveryService.Arn
         Port: 8000
 
+  # Service discovery for random service, DnsConfig property specifies the DNS records that are automatically created
+  # in Amazon Route 53 when your Amazon ECS task is registered with the service discovery service
+  RandomDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Description: Discovery Service for the random service
+      Name: random-service
+      NamespaceId: !Ref DemoPrivateNamespace
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - TTL: 60
+            Type: A
+          - TTL: 60
+            Type: SRV
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+  # Metadata description of what message container to run and what resource requirements it has
+  RandomTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: RANDOM-TD
+      Cpu: 512
+      Memory: 1024
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+      - FARGATE
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      TaskRoleArn: !Ref ECSTaskRole
+      ContainerDefinitions:
+      - Name: RANDOM-CONTAINER
+        Cpu: 512
+        Memory: 1024
+        Image: 'asakchris/aws-service-discovery-random:1.0-SNAPSHOT'
+        PortMappings:
+        - ContainerPort: 8000
+        - ContainerPort: 8001
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: !Ref RandomLogGroup
+            awslogs-region: !Ref AWS::Region
+            awslogs-stream-prefix: ecs
+  # Service is a resource which allows to run multiple copies of a type of task, and gather up their logs and metrics,
+  # as well as monitor the number of running tasks and replace any that have crashed
+  RandomECSService:
+    Type: AWS::ECS::Service
+    DependsOn: RandomLoadBalancerRule
+    Properties:
+      ServiceName: RANDOM-SERVICE
+      Cluster: !Ref ECSCluster
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 75
+      DesiredCount: 2
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+          - !Ref ContainerSecurityGroup
+          Subnets: !Ref PrivateSubnetList
+      TaskDefinition: !Ref RandomTaskDefinition
+      LoadBalancers:
+      - ContainerName: RANDOM-CONTAINER
+        ContainerPort: 8000
+        TargetGroupArn: !Ref RandomTargetGroup
+      ServiceRegistries:
+      - RegistryArn: !GetAtt RandomDiscoveryService.Arn
+        Port: 8000
+
   # Metadata description of what welcome container to run and what resource requirements it has
   WelcomeTaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -369,8 +474,10 @@ Resources:
         - ContainerPort: 8000
         - ContainerPort: 8001
         Environment:
-        - Name: APP_FEIGN_URL
-          Value: http://messageservice.messagesvcnamespace:8000/
+        - Name: MESSAGE_SERVICE_URL
+          Value: http://message-service.my-demo-domain:8000/
+        - Name: RANDOM_SERVICE_URL
+          Value: http://random-service.my-demo-domain:8000/
         LogConfiguration:
           LogDriver: awslogs
           Options:
