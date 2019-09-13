@@ -13,8 +13,8 @@ services:
   welcome:
     image: asakchris/aws-service-discovery-welcome:1.0-SNAPSHOT
     environment:
-      - MESSAGE_SERVICE_URL=http://message:8010/
-      - RANDOM_SERVICE_URL=http://random:8020/
+      - MESSAGE_SERVICE_URL=http://message:8000/
+      - RANDOM_SERVICE_URL=http://random:8000/
     ports:
       - "8000:8000"
       - "8001:8001"
