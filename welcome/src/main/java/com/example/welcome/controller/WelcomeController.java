@@ -1,6 +1,7 @@
 package com.example.welcome.controller;
 
 import com.example.welcome.feign.MessageClient;
+import com.example.welcome.feign.RandomClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -12,10 +13,14 @@ public class WelcomeController {
     @Autowired
     private MessageClient messageClient;
 
+    @Autowired
+    private RandomClient randomClient;
+
     @GetMapping(value = "/welcome")
     public ResponseEntity<String> welcome() {
         String message = messageClient.getMessage();
-        String finalMessage = "Hello world from " + message;
+        Integer randomNumber = randomClient.getRandomNumber();
+        String finalMessage = "Hello world from " + message + "! Random number: " + randomNumber;
         return new ResponseEntity<>(finalMessage, HttpStatus.OK);
     }
 }

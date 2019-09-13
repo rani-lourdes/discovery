@@ -18,6 +18,11 @@ Message Service
 VM Options: -Dserver.port=8010 -Dmanagement.server.port=8011
 ```
 
+Random Service
+```
+VM Options: -Dserver.port=8020 -Dmanagement.server.port=8021
+```
+
 Welcome Service
 ```
 VM Options: -Dapp.feign.url=http://localhost:8010/
@@ -25,7 +30,7 @@ VM Options: -Dapp.feign.url=http://localhost:8010/
 
 ###### docker compose
 ```
-docker-compose up
+docker-compose up -d
 ```
 
 ### Test
@@ -34,6 +39,12 @@ Message Service
 ```
 http://localhost:8010/message
 http://localhost:8011/actuator/health
+```
+
+Random Service
+```
+http://localhost:8020/random
+http://localhost:8021/actuator/health
 ```
 
 Welcome Service
@@ -62,4 +73,5 @@ aws cloudformation create-stack --stack-name SERVICE-DISCOVERY-POC --template-bo
 ```
 http://APP-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/welcome
 http://APP-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/message
+http://APP-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/random
 ```

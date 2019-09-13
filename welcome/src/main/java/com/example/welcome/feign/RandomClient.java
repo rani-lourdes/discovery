@@ -4,8 +4,8 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
-@FeignClient(value = "message", url = "${app.feign.message.url}")
-public interface MessageClient {
-    @RequestMapping(method = RequestMethod.GET, value = "/message")
-    String getMessage();
+@FeignClient(value = "random", url = "${app.feign.random.url}")
+public interface RandomClient {
+    @RequestMapping(method = RequestMethod.GET, value = "/random")
+    Integer getRandomNumber();
 }
