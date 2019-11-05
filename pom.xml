@@ -12,6 +12,7 @@
         <module>welcome</module>
         <module>message</module>
         <module>random</module>
+        <module>swagger</module>
     </modules>
     <parent>
         <groupId>org.springframework.boot</groupId>
