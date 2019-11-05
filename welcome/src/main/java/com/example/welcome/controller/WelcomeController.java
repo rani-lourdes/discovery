@@ -16,11 +16,11 @@ public class WelcomeController {
     @Autowired
     private RandomClient randomClient;
 
-    @GetMapping(value = "/hello")
+    @GetMapping(value = "/displayMessage")
     public ResponseEntity<String> welcome() {
         String message = messageClient.getMessage();
         Integer randomNumber = randomClient.getRandomNumber();
-        String finalMessage = "Hello world from " + message + "! Random number: " + randomNumber;
+        String finalMessage = "Hello world - " + message + "! Random number: " + randomNumber;
         return new ResponseEntity<>(finalMessage, HttpStatus.OK);
     }
 }

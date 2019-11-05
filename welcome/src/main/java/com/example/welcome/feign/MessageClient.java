@@ -6,6 +6,6 @@ import org.springframework.web.bind.annotation.RequestMethod;
 
 @FeignClient(value = "message", url = "${app.feign.message.url}")
 public interface MessageClient {
-    @RequestMapping(method = RequestMethod.GET, value = "/read")
+    @RequestMapping(method = RequestMethod.GET, value = "/getMessage")
     String getMessage();
 }

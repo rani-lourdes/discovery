@@ -7,9 +7,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class MessageController {
-    @GetMapping(value = "/read")
+    @GetMapping(value = "/getMessage")
     public ResponseEntity<String> message() {
-        String hostname = "have a nice day";
+        String hostname = "Message from host";
         return new ResponseEntity<>(hostname, HttpStatus.OK);
     }
 

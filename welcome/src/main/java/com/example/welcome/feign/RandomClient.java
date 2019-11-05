@@ -6,6 +6,6 @@ import org.springframework.web.bind.annotation.RequestMethod;
 
 @FeignClient(value = "random", url = "${app.feign.random.url}")
 public interface RandomClient {
-    @RequestMapping(method = RequestMethod.GET, value = "/display")
+    @RequestMapping(method = RequestMethod.GET, value = "/getRandomNumber")
     Integer getRandomNumber();
 }

@@ -1,10 +1,10 @@
 server:
-  port: 8040
+  port: 8000
   servlet:
     context-path: /api/v1
 management:
   server:
-    port: 8041
+    port: 8001
   endpoints:
     web:
       exposure:

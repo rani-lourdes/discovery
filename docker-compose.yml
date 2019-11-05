@@ -22,4 +22,4 @@ services:
     image: 734334009528.dkr.ecr.us-east-1.amazonaws.com/arun/aws-service-discovery-swagger:1.0-SNAPSHOT
     ports:
       - "3888:8000"
-      - "3889:8001"     
+      - "3889:8001"
