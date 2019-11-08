@@ -25,6 +25,6 @@ feign:
 app:
   feign:
     message:
-      url: ${MESSAGE_SERVICE_URL:http://localhost:8020/api/v1/message}
+      url: ${MESSAGE_SERVICE_URL:http://localhost:8010/api/v1/message}
     random:
-      url: ${RANDOM_SERVICE_URL:http://localhost:8030/api/v1/random}
+      url: ${RANDOM_SERVICE_URL:http://localhost:8020/api/v1/random}

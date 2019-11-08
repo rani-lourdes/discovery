@@ -10,6 +10,14 @@ Parameters:
   PrivateSubnetList:
     Type: List<AWS::EC2::Subnet::Id>
     Description: Select at least two private subnets in given VPC where Fargate run tasks
+  AppName:
+    Type: String
+    Default: discovery
+    Description: Application Name
+  ImageVersion:
+    Type: String
+    Default: 'latest'
+    Description: Version of the docker image
 Resources:
   # Load balancer security group
   DiscoveryLoadBalancerSG:
@@ -130,7 +138,7 @@ Resources:
       - Field: path-pattern
         Values: ['/api/v1/welcome/**']
       ListenerArn: !Ref DiscoveryAppLoadBalancerListener
-      Priority: 3 
+      Priority: 3
   # When message container comes up, it will register in this target group
   DiscoveryMessageTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -375,7 +383,7 @@ Resources:
       - Name: DISCOVERY-MESSAGE-CONTAINER
         Cpu: 512
         Memory: 1024
-        Image: '734334009528.dkr.ecr.us-east-1.amazonaws.com/arun/aws-service-discovery-message:1.0-SNAPSHOT'
+        Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/${AppName}/aws-service-discovery-message:${ImageVersion}
         PortMappings:
         - ContainerPort: 8000
         - ContainerPort: 8001
@@ -446,7 +454,7 @@ Resources:
       - Name: DISCOVERY-RANDOM-CONTAINER
         Cpu: 512
         Memory: 1024
-        Image: '734334009528.dkr.ecr.us-east-1.amazonaws.com/arun/aws-service-discovery-random:1.0-SNAPSHOT'
+        Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/${AppName}/aws-service-discovery-random:${ImageVersion}
         PortMappings:
         - ContainerPort: 8000
         - ContainerPort: 8001
@@ -499,7 +507,7 @@ Resources:
       - Name: DISCOVERY-SWAGGER-CONTAINER
         Cpu: 512
         Memory: 1024
-        Image: '734334009528.dkr.ecr.us-east-1.amazonaws.com/arun/aws-service-discovery-swagger:1.0-SNAPSHOT'
+        Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/${AppName}/aws-service-discovery-swagger:${ImageVersion}
         PortMappings:
         - ContainerPort: 8000
         - ContainerPort: 8001
@@ -549,7 +557,7 @@ Resources:
       - Name: DISCOVERY-WELCOME-CONTAINER
         Cpu: 512
         Memory: 1024
-        Image: '734334009528.dkr.ecr.us-east-1.amazonaws.com/arun/aws-service-discovery-welcome:1.0-SNAPSHOT'
+        Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/${AppName}/aws-service-discovery-welcome:${ImageVersion}
         PortMappings:
         - ContainerPort: 8000
         - ContainerPort: 8001

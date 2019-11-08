@@ -15,17 +15,17 @@ mvn clean package dockerfile:push
 ###### Local
 Message Service
 ```
-VM Options: -Dserver.port=8020 -Dmanagement.server.port=8021
+VM Options: -Dserver.port=8010 -Dmanagement.server.port=8011
 ```
 
 Random Service
 ```
-VM Options: -Dserver.port=8030 -Dmanagement.server.port=8031
+VM Options: -Dserver.port=8020 -Dmanagement.server.port=8021
 ```
 
 Welcome Service
 ```
-VM Options: -Dapp.feign.message.url=http://localhost:8010/api/v1/message -Dapp.feign.random.url=http://localhost:8010/api/v1/random
+VM Options: -Dapp.feign.message.url=http://localhost:8010/api/v1/message -Dapp.feign.random.url=http://localhost:8020/api/v1/random
 ```
 
 ###### docker compose
@@ -37,19 +37,19 @@ docker-compose up -d
 ###### Local
 Message Service
 ```
-http://localhost:8020/api/v1/message/getMessage
-http://localhost:8021/api/v1/message/actuator/health
+http://localhost:8010/api/v1/message/hostname
+http://localhost:8011/api/v1/message/actuator/health
 ```
 
 Random Service
 ```
-http://localhost:8030/api/v1/random/getRandomNumber
-http://localhost:8031/api/v1/random/actuator/health
+http://localhost:8020/api/v1/random/number
+http://localhost:8021/api/v1/random/actuator/health
 ```
 
 Welcome Service
 ```
-http://localhost:8000/api/v1/welcome/displayMessage
+http://localhost:8000/api/v1/welcome/message
 http://localhost:8001/api/v1/welcome/actuator/health
 ```
 
@@ -71,8 +71,8 @@ aws cloudformation create-stack --stack-name SERVICE-DISCOVERY-POC --template-bo
 
 ###### Invoke services using ALB
 ```
-http://APP-DISCOVERY-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/api/v1/welcome/displayMessage
-http://APP-DISCOVERY-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/api/v1/message/getMessage
-http://APP-DISCOVERY-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/api/v1/random/getRandomNumber
+http://APP-DISCOVERY-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/api/v1/welcome/message
+http://APP-DISCOVERY-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/api/v1/message/hostname
+http://APP-DISCOVERY-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/api/v1/random/number
 http://APP-DISCOVERY-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/api/v1/swagger-ui.html
 ```
