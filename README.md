@@ -3,12 +3,12 @@
 ### Build
 ###### Build application and create local image
 ```
-mvn clean package dockerfile:build
+mvn clean package dockerfile:build -Ddocker.repository=<repository_name>
 ```
 
 ###### Build application and push image to remote repository
 ```
-mvn clean package dockerfile:push
+mvn clean package dockerfile:push -Ddocker.repository=<repository_name>
 ```
 
 ### Run

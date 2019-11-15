@@ -10,14 +10,13 @@ Parameters:
   PrivateSubnetList:
     Type: List<AWS::EC2::Subnet::Id>
     Description: Select at least two private subnets in given VPC where Fargate run tasks
-  AppName:
-    Type: String
-    Default: discovery
-    Description: Application Name
   ImageVersion:
     Type: String
     Default: 'latest'
     Description: Version of the docker image
+  ImageRepository:
+    Type: String
+    Description: Repository of the docker image
 Resources:
   # Load balancer security group
   DiscoveryLoadBalancerSG:
@@ -383,7 +382,7 @@ Resources:
       - Name: DISCOVERY-MESSAGE-CONTAINER
         Cpu: 512
         Memory: 1024
-        Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/${AppName}/aws-service-discovery-message:${ImageVersion}
+        Image: !Sub ${ImageRepository}/aws-service-discovery-message:${ImageVersion}
         PortMappings:
         - ContainerPort: 8000
         - ContainerPort: 8001
@@ -454,7 +453,7 @@ Resources:
       - Name: DISCOVERY-RANDOM-CONTAINER
         Cpu: 512
         Memory: 1024
-        Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/${AppName}/aws-service-discovery-random:${ImageVersion}
+        Image: !Sub ${ImageRepository}/aws-service-discovery-random:${ImageVersion}
         PortMappings:
         - ContainerPort: 8000
         - ContainerPort: 8001
@@ -507,7 +506,7 @@ Resources:
       - Name: DISCOVERY-SWAGGER-CONTAINER
         Cpu: 512
         Memory: 1024
-        Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/${AppName}/aws-service-discovery-swagger:${ImageVersion}
+        Image: !Sub ${ImageRepository}/aws-service-discovery-swagger:${ImageVersion}
         PortMappings:
         - ContainerPort: 8000
         - ContainerPort: 8001
@@ -557,7 +556,7 @@ Resources:
       - Name: DISCOVERY-WELCOME-CONTAINER
         Cpu: 512
         Memory: 1024
-        Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.${AWS::URLSuffix}/${AppName}/aws-service-discovery-welcome:${ImageVersion}
+        Image: !Sub ${ImageRepository}/aws-service-discovery-welcome:${ImageVersion}
         PortMappings:
         - ContainerPort: 8000
         - ContainerPort: 8001

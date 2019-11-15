@@ -65,7 +65,7 @@
                     <artifactId>dockerfile-maven-plugin</artifactId>
                     <version>1.4.10</version>
                     <configuration>
-                        <repository>734334009528.dkr.ecr.us-east-1.amazonaws.com/discovery/aws-service-discovery-${project.artifactId}</repository>
+                        <repository>${docker.repository}/aws-service-discovery-${project.artifactId}</repository>
                         <tag>${project.version}</tag>
                         <googleContainerRegistryEnabled>false</googleContainerRegistryEnabled>
                         <skip>true</skip>
