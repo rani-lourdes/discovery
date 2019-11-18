@@ -494,7 +494,7 @@ Resources:
   DiscoverySwaggerTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: Discovery-Swagger-TD
+      Family: DISCOVERY-SWAGGER-TD
       Cpu: 512
       Memory: 1024
       NetworkMode: awsvpc

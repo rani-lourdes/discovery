@@ -8,8 +8,8 @@ services:
   random:
     image: ${REPOSITORY_URL}/aws-service-discovery-random:1.0-SNAPSHOT
     ports:
-      - "9010:8000"
-      - "9011:8001"
+      - "8020:8000"
+      - "8021:8001"
   welcome:
     image: ${REPOSITORY_URL}/aws-service-discovery-welcome:1.0-SNAPSHOT
     environment:
@@ -21,5 +21,5 @@ services:
   swagger:
     image: ${REPOSITORY_URL}/aws-service-discovery-swagger:1.0-SNAPSHOT
     ports:
-      - "3888:8000"
-      - "3889:8001"
+      - "8030:8000"
+      - "8031:8001"

@@ -38,19 +38,19 @@ docker-compose up -d
 Message Service
 ```
 http://localhost:8010/api/v1/message/hostname
-http://localhost:8011/api/v1/message/actuator/health
+http://localhost:8011/actuator/health
 ```
 
 Random Service
 ```
 http://localhost:8020/api/v1/random/number
-http://localhost:8021/api/v1/random/actuator/health
+http://localhost:8021/actuator/health
 ```
 
 Welcome Service
 ```
 http://localhost:8000/api/v1/welcome/message
-http://localhost:8001/api/v1/welcome/actuator/health
+http://localhost:8001/actuator/health
 ```
 
 ### Deploy in AWS ECS
