@@ -16,6 +16,7 @@ Parameters:
     Description: Version of the docker image
   ImageRepository:
     Type: String
+    Default: 'asakchris'
     Description: Repository of the docker image
 Resources:
   # Load balancer security group
