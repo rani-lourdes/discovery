@@ -10,12 +10,20 @@ Parameters:
   PrivateSubnetList:
     Type: List<AWS::EC2::Subnet::Id>
     Description: Select at least two private subnets in given VPC where Fargate run tasks
+  ImageVersion:
+    Type: String
+    Default: 'latest'
+    Description: Version of the docker image
+  ImageRepository:
+    Type: String
+    Default: 'asakchris'
+    Description: Repository of the docker image
 Resources:
   # Load balancer security group
-  LoadBalancerSG:
+  DiscoveryLoadBalancerSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: LOAD-BALANCER-SG
+      GroupName: DISCOVERY-LOAD-BALANCER-SG
       GroupDescription: Access to the public facing load balancer
       VpcId: !Ref VpcId
       SecurityGroupIngress:
@@ -41,49 +49,49 @@ Resources:
           CidrIpv6: '::/0'
           Description: Allow HTTPS
   # Container security group
-  ContainerSecurityGroup:
+  DiscoveryContainerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: WELCOME-CONTAINER-SG
+      GroupName: DISCOVERY-WELCOME-CONTAINER-SG
       GroupDescription: Access to the welcome container
       VpcId: !Ref VpcId
   # Allow traffic from load balancer into container
-  ContainerSecurityGroupIngressFromALB:
+  DiscoveryContainerSGIngressFromALB:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       Description: Ingress from the public Load balancer
-      GroupId: !Ref 'ContainerSecurityGroup'
+      GroupId: !Ref 'DiscoveryContainerSecurityGroup'
       IpProtocol: tcp
       FromPort: 8000
       ToPort: 8001
-      SourceSecurityGroupId: !Ref 'LoadBalancerSG'
+      SourceSecurityGroupId: !Ref 'DiscoveryLoadBalancerSG'
   # Allow traffic from one container into another, so that welcome service can reach message service using service discovery DNS URL
-  ContainerSecurityGroupIngressFromSelf:
+  DiscoveryContainerSGIngressFromSelf:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       Description: Ingress from other containers in the same security group
-      GroupId: !Ref 'ContainerSecurityGroup'
+      GroupId: !Ref 'DiscoveryContainerSecurityGroup'
       IpProtocol: tcp
       FromPort: 8000
       ToPort: 8000
-      SourceSecurityGroupId: !Ref 'ContainerSecurityGroup'
+      SourceSecurityGroupId: !Ref 'DiscoveryContainerSecurityGroup'
 
   # Application load balancer for getting traffic to containers
-  AppLoadBalancer:
+  DiscoveryAppLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: APP-ALB
+      Name: APP-DISCOVERY-ALB
       Scheme: internet-facing
       LoadBalancerAttributes:
       - Key: idle_timeout.timeout_seconds
         Value: '60'
       Subnets: !Ref PublicSubnetList
-      SecurityGroups: [!Ref 'LoadBalancerSG']
+      SecurityGroups: [!Ref 'DiscoveryLoadBalancerSG']
   # This target group is used to setup the ALB to just drop traffic initially, before any real service target groups have been added
-  AppLoadBalancerDummyTG:
+  DiscoveryAppLoadBalancerDummyTG:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: APP-DUMMY-TG
+      Name: APP-DISCOVERY-TestDUMMY-TG
       HealthCheckIntervalSeconds: 150
       HealthCheckPath: /
       HealthCheckProtocol: HTTP
@@ -93,22 +101,22 @@ Resources:
       Protocol: HTTP
       UnhealthyThresholdCount: 2
       VpcId: !Ref VpcId
-  AppLoadBalancerListener:
+  DiscoveryAppLoadBalancerListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     DependsOn:
-    - AppLoadBalancer
+    - DiscoveryAppLoadBalancer
     Properties:
       DefaultActions:
-      - TargetGroupArn: !Ref 'AppLoadBalancerDummyTG'
+      - TargetGroupArn: !Ref 'DiscoveryAppLoadBalancerDummyTG'
         Type: 'forward'
-      LoadBalancerArn: !Ref 'AppLoadBalancer'
+      LoadBalancerArn: !Ref 'DiscoveryAppLoadBalancer'
       Port: 80
       Protocol: HTTP
   # When welcome container comes up, it will register in this target group
-  WelcomeTargetGroup:
+  DiscoveryWelcomeTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: WELCOME-TG
+      Name: DISCOVERY-WELCOME-TG
       HealthCheckIntervalSeconds: 150
       HealthCheckPath: /actuator/health
       HealthCheckPort: 8001
@@ -120,22 +128,22 @@ Resources:
       Port: 8000
       Protocol: HTTP
       VpcId: !Ref VpcId
-  WelcomeLoadBalancerRule:
+  DiscoveryWelcomeLoadBalancerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
       Actions:
-      - TargetGroupArn: !Ref 'WelcomeTargetGroup'
+      - TargetGroupArn: !Ref 'DiscoveryWelcomeTargetGroup'
         Type: 'forward'
       Conditions:
       - Field: path-pattern
-        Values: ['*']
-      ListenerArn: !Ref AppLoadBalancerListener
+        Values: ['/api/v1/welcome/**']
+      ListenerArn: !Ref DiscoveryAppLoadBalancerListener
       Priority: 3
   # When message container comes up, it will register in this target group
-  MessageTargetGroup:
+  DiscoveryMessageTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: MESSAGE-TG
+      Name: DISCOVERY-MESSAGE-TG
       HealthCheckIntervalSeconds: 150
       HealthCheckPath: /actuator/health
       HealthCheckPort: 8001
@@ -147,22 +155,22 @@ Resources:
       Port: 8000
       Protocol: HTTP
       VpcId: !Ref VpcId
-  MessageLoadBalancerRule:
+  DiscoveryMessageLoadBalancerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
       Actions:
-      - TargetGroupArn: !Ref 'MessageTargetGroup'
+      - TargetGroupArn: !Ref 'DiscoveryMessageTargetGroup'
         Type: 'forward'
       Conditions:
       - Field: path-pattern
-        Values: ['/message']
-      ListenerArn: !Ref AppLoadBalancerListener
+        Values: ['/api/v1/message/**']
+      ListenerArn: !Ref DiscoveryAppLoadBalancerListener
       Priority: 1
   # When random container comes up, it will register in this target group
-  RandomTargetGroup:
+  DiscoveryRandomTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: RANDOM-TG
+      Name: DISCOVERY-RANDOM-TG
       HealthCheckIntervalSeconds: 150
       HealthCheckPath: /actuator/health
       HealthCheckPort: 8001
@@ -174,24 +182,50 @@ Resources:
       Port: 8000
       Protocol: HTTP
       VpcId: !Ref VpcId
-  RandomLoadBalancerRule:
+  DiscoveryRandomLoadBalancerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
       Actions:
-      - TargetGroupArn: !Ref 'RandomTargetGroup'
+      - TargetGroupArn: !Ref 'DiscoveryRandomTargetGroup'
         Type: 'forward'
       Conditions:
       - Field: path-pattern
-        Values: ['/random']
-      ListenerArn: !Ref AppLoadBalancerListener
+        Values: ['/api/v1/random/**']
+      ListenerArn: !Ref DiscoveryAppLoadBalancerListener
       Priority: 2
-
+  # When swagger container comes up, it will register in this target group
+  DiscoverySwaggerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: DISCOVERY-SWAGGER-TG
+      HealthCheckIntervalSeconds: 150
+      HealthCheckPath: /actuator/health
+      HealthCheckPort: 8001
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 120
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      TargetType: ip
+      Port: 8000
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+  DiscoverySwaggerLoadBalancerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+      - TargetGroupArn: !Ref 'DiscoverySwaggerTargetGroup'
+        Type: 'forward'
+      Conditions:
+      - Field: path-pattern
+        Values: ['/api/v1/**']
+      ListenerArn: !Ref DiscoveryAppLoadBalancerListener
+      Priority: 4
   # This is an IAM role which authorizes ECS to manage resources on the account, such as updating load balancer
   # with details of where containers are, so that traffic can reach containers.
-  ECSRole:
+  DiscoveryECSRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: ECS-ROLE
+      RoleName: DISCOVERY-ECS-ROLE
       AssumeRolePolicyDocument:
         Statement:
         - Effect: Allow
@@ -228,10 +262,10 @@ Resources:
             Resource: '*'
 
   # This is a role which is used by the ECS tasks themselves.
-  ECSTaskExecutionRole:
+  DiscoveryECSTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: ECS-TASK-EXEC-ROLE
+      RoleName: DISCOVERY-ECS-TASK-EXEC-ROLE
       AssumeRolePolicyDocument:
         Statement:
         - Effect: Allow
@@ -258,10 +292,10 @@ Resources:
 
   # IAM role to give the service's containers if the code within needs to access other AWS resources
   # like ECS tasks, S3 buckets etc
-  ECSTaskRole:
+  DiscoveryECSTaskRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: ECS-TASK-ROLE
+      RoleName: DISCOVERY-ECS-TASK-ROLE
       AssumeRolePolicyDocument:
         Statement:
         - Effect: 'Allow'
@@ -280,35 +314,40 @@ Resources:
             Resource: '*'
 
   # Service Discovery POC ECS Cluster
-  ECSCluster:
+  DiscoveryECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: SERVICE-DISCOVERY-ECS-CLUSTER
 
   # Cloud watch log group to which welcome container send logs
-  WelcomeLogGroup:
+  DiscoveryWelcomeLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/ECS/welcome'
+      LogGroupName: !Sub '/ECS/discovery/welcome'
       RetentionInDays: 7
   # Cloud watch log group to which message container send logs
-  MessageLogGroup:
+  DiscoveryMessageLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/ECS/message'
+      LogGroupName: !Sub '/ECS/discovery/message'
       RetentionInDays: 7
   # Cloud watch log group to which random container send logs
-  RandomLogGroup:
+  DiscoveryRandomLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/ECS/random'
+      LogGroupName: !Sub '/ECS/discovery/random'
       RetentionInDays: 7
-
+  # Cloud watch log group to which message container send logs
+  DiscoverySwaggerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ECS/discovery/swagger'
+      RetentionInDays: 7
   # Private namespace for services
-  DemoPrivateNamespace:
+  DiscoveryPrivateNamespace:
     Type: AWS::ServiceDiscovery::PrivateDnsNamespace
     Properties:
-      Name: my-demo-domain
+      Name: my-discovery-domain
       Vpc: !Ref VpcId
 
   # Service discovery for message service, DnsConfig property specifies the DNS records that are automatically created
@@ -317,8 +356,8 @@ Resources:
     Type: AWS::ServiceDiscovery::Service
     Properties:
       Description: Discovery Service for the message service
-      Name: message-service
-      NamespaceId: !Ref DemoPrivateNamespace
+      Name: discovery-message-service
+      NamespaceId: !Ref DiscoveryPrivateNamespace
       DnsConfig:
         RoutingPolicy: MULTIVALUE
         DnsRecords:
@@ -329,39 +368,39 @@ Resources:
       HealthCheckCustomConfig:
         FailureThreshold: 1
   # Metadata description of what message container to run and what resource requirements it has
-  MessageTaskDefinition:
+  DiscoveryMessageTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: MESSAGE-TD
+      Family: DISCOVERY-MESSAGE-TD
       Cpu: 512
       Memory: 1024
       NetworkMode: awsvpc
       RequiresCompatibilities:
       - FARGATE
-      ExecutionRoleArn: !Ref ECSTaskExecutionRole
-      TaskRoleArn: !Ref ECSTaskRole
+      ExecutionRoleArn: !Ref DiscoveryECSTaskExecutionRole
+      TaskRoleArn: !Ref DiscoveryECSTaskRole
       ContainerDefinitions:
-      - Name: MESSAGE-CONTAINER
+      - Name: DISCOVERY-MESSAGE-CONTAINER
         Cpu: 512
         Memory: 1024
-        Image: 'asakchris/aws-service-discovery-message:1.0-SNAPSHOT'
+        Image: !Sub ${ImageRepository}/aws-service-discovery-message:${ImageVersion}
         PortMappings:
         - ContainerPort: 8000
         - ContainerPort: 8001
         LogConfiguration:
           LogDriver: awslogs
           Options:
-            awslogs-group: !Ref MessageLogGroup
+            awslogs-group: !Ref DiscoveryMessageLogGroup
             awslogs-region: !Ref AWS::Region
             awslogs-stream-prefix: ecs
   # Service is a resource which allows to run multiple copies of a type of task, and gather up their logs and metrics,
   # as well as monitor the number of running tasks and replace any that have crashed
-  MessageECSService:
+  DiscoveryMessageECSService:
     Type: AWS::ECS::Service
-    DependsOn: MessageLoadBalancerRule
+    DependsOn: DiscoveryMessageLoadBalancerRule
     Properties:
-      ServiceName: MESSAGE-SERVICE
-      Cluster: !Ref ECSCluster
+      ServiceName: DISCOVERY-MESSAGE-SERVICE
+      Cluster: !Ref DiscoveryECSCluster
       LaunchType: FARGATE
       DeploymentConfiguration:
         MaximumPercent: 200
@@ -371,13 +410,13 @@ Resources:
         AwsvpcConfiguration:
           AssignPublicIp: DISABLED
           SecurityGroups:
-          - !Ref ContainerSecurityGroup
+          - !Ref DiscoveryContainerSecurityGroup
           Subnets: !Ref PrivateSubnetList
-      TaskDefinition: !Ref MessageTaskDefinition
+      TaskDefinition: !Ref DiscoveryMessageTaskDefinition
       LoadBalancers:
-      - ContainerName: MESSAGE-CONTAINER
+      - ContainerName: DISCOVERY-MESSAGE-CONTAINER
         ContainerPort: 8000
-        TargetGroupArn: !Ref MessageTargetGroup
+        TargetGroupArn: !Ref DiscoveryMessageTargetGroup
       ServiceRegistries:
       - RegistryArn: !GetAtt MessageDiscoveryService.Arn
         Port: 8000
@@ -388,8 +427,8 @@ Resources:
     Type: AWS::ServiceDiscovery::Service
     Properties:
       Description: Discovery Service for the random service
-      Name: random-service
-      NamespaceId: !Ref DemoPrivateNamespace
+      Name: discovery-random-service
+      NamespaceId: !Ref DiscoveryPrivateNamespace
       DnsConfig:
         RoutingPolicy: MULTIVALUE
         DnsRecords:
@@ -400,39 +439,39 @@ Resources:
       HealthCheckCustomConfig:
         FailureThreshold: 1
   # Metadata description of what message container to run and what resource requirements it has
-  RandomTaskDefinition:
+  DiscoveryRandomTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: RANDOM-TD
+      Family: DISCOVERY-RANDOM-TD
       Cpu: 512
       Memory: 1024
       NetworkMode: awsvpc
       RequiresCompatibilities:
       - FARGATE
-      ExecutionRoleArn: !Ref ECSTaskExecutionRole
-      TaskRoleArn: !Ref ECSTaskRole
+      ExecutionRoleArn: !Ref DiscoveryECSTaskExecutionRole
+      TaskRoleArn: !Ref DiscoveryECSTaskRole
       ContainerDefinitions:
-      - Name: RANDOM-CONTAINER
+      - Name: DISCOVERY-RANDOM-CONTAINER
         Cpu: 512
         Memory: 1024
-        Image: 'asakchris/aws-service-discovery-random:1.0-SNAPSHOT'
+        Image: !Sub ${ImageRepository}/aws-service-discovery-random:${ImageVersion}
         PortMappings:
         - ContainerPort: 8000
         - ContainerPort: 8001
         LogConfiguration:
           LogDriver: awslogs
           Options:
-            awslogs-group: !Ref RandomLogGroup
+            awslogs-group: !Ref DiscoveryRandomLogGroup
             awslogs-region: !Ref AWS::Region
             awslogs-stream-prefix: ecs
   # Service is a resource which allows to run multiple copies of a type of task, and gather up their logs and metrics,
   # as well as monitor the number of running tasks and replace any that have crashed
-  RandomECSService:
+  DiscoveryRandomECSService:
     Type: AWS::ECS::Service
-    DependsOn: RandomLoadBalancerRule
+    DependsOn: DiscoveryRandomLoadBalancerRule
     Properties:
-      ServiceName: RANDOM-SERVICE
-      Cluster: !Ref ECSCluster
+      ServiceName: DISCOVERY-RANDOM-SERVICE
+      Cluster: !Ref DiscoveryECSCluster
       LaunchType: FARGATE
       DeploymentConfiguration:
         MaximumPercent: 200
@@ -442,56 +481,105 @@ Resources:
         AwsvpcConfiguration:
           AssignPublicIp: DISABLED
           SecurityGroups:
-          - !Ref ContainerSecurityGroup
+          - !Ref DiscoveryContainerSecurityGroup
           Subnets: !Ref PrivateSubnetList
-      TaskDefinition: !Ref RandomTaskDefinition
+      TaskDefinition: !Ref DiscoveryRandomTaskDefinition
       LoadBalancers:
-      - ContainerName: RANDOM-CONTAINER
+      - ContainerName: DISCOVERY-RANDOM-CONTAINER
         ContainerPort: 8000
-        TargetGroupArn: !Ref RandomTargetGroup
+        TargetGroupArn: !Ref DiscoveryRandomTargetGroup
       ServiceRegistries:
       - RegistryArn: !GetAtt RandomDiscoveryService.Arn
         Port: 8000
-
-  # Metadata description of what welcome container to run and what resource requirements it has
-  WelcomeTaskDefinition:
+  # Metadata description of what swagger container to run and what resource requirements it has
+  DiscoverySwaggerTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: WELCOME-TD
+      Family: DISCOVERY-SWAGGER-TD
       Cpu: 512
       Memory: 1024
       NetworkMode: awsvpc
       RequiresCompatibilities:
       - FARGATE
-      ExecutionRoleArn: !Ref ECSTaskExecutionRole
-      TaskRoleArn: !Ref ECSTaskRole
+      ExecutionRoleArn: !Ref DiscoveryECSTaskExecutionRole
+      TaskRoleArn: !Ref DiscoveryECSTaskRole
       ContainerDefinitions:
-      - Name: WELCOME-CONTAINER
+      - Name: DISCOVERY-SWAGGER-CONTAINER
         Cpu: 512
         Memory: 1024
-        Image: 'asakchris/aws-service-discovery-welcome:1.0-SNAPSHOT'
+        Image: !Sub ${ImageRepository}/aws-service-discovery-swagger:${ImageVersion}
+        PortMappings:
+        - ContainerPort: 8000
+        - ContainerPort: 8001
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: !Ref DiscoverySwaggerLogGroup
+            awslogs-region: !Ref AWS::Region
+            awslogs-stream-prefix: ecs
+  # Service is a resource which allows to run multiple copies of a type of task, and gather up their logs and metrics,
+  # as well as monitor the number of running tasks and replace any that have crashed
+  DiscoverySwaggerECSService:
+    Type: AWS::ECS::Service
+    DependsOn: DiscoverySwaggerLoadBalancerRule
+    Properties:
+      ServiceName: DISCOVERY-SWAGGER-SERVICE
+      Cluster: !Ref DiscoveryECSCluster
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 75
+      DesiredCount: 2
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+          - !Ref DiscoveryContainerSecurityGroup
+          Subnets: !Ref PrivateSubnetList
+      TaskDefinition: !Ref DiscoverySwaggerTaskDefinition
+      LoadBalancers:
+      - ContainerName: DISCOVERY-SWAGGER-CONTAINER
+        ContainerPort: 8000
+        TargetGroupArn: !Ref DiscoverySwaggerTargetGroup
+  # Metadata description of what welcome container to run and what resource requirements it has
+  DiscoveryWelcomeTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: DISCOVERY-WELCOME-TD
+      Cpu: 512
+      Memory: 1024
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+      - FARGATE
+      ExecutionRoleArn: !Ref DiscoveryECSTaskExecutionRole
+      TaskRoleArn: !Ref DiscoveryECSTaskRole
+      ContainerDefinitions:
+      - Name: DISCOVERY-WELCOME-CONTAINER
+        Cpu: 512
+        Memory: 1024
+        Image: !Sub ${ImageRepository}/aws-service-discovery-welcome:${ImageVersion}
         PortMappings:
         - ContainerPort: 8000
         - ContainerPort: 8001
         Environment:
         - Name: MESSAGE_SERVICE_URL
-          Value: http://message-service.my-demo-domain:8000/
+          Value: http://discovery-message-service.my-discovery-domain:8000/api/v1/message
         - Name: RANDOM_SERVICE_URL
-          Value: http://random-service.my-demo-domain:8000/
+          Value: http://discovery-random-service.my-discovery-domain:8000/api/v1/random
         LogConfiguration:
           LogDriver: awslogs
           Options:
-            awslogs-group: !Ref WelcomeLogGroup
+            awslogs-group: !Ref DiscoveryWelcomeLogGroup
             awslogs-region: !Ref AWS::Region
             awslogs-stream-prefix: ecs
   # Service is a resource which allows to run multiple copies of a type of task, and gather up their logs and metrics,
   # as well as monitor the number of running tasks and replace any that have crashed
-  WelcomeECSService:
+  DiscoveryWelcomeECSService:
     Type: AWS::ECS::Service
-    DependsOn: WelcomeLoadBalancerRule
+    DependsOn: DiscoveryWelcomeLoadBalancerRule
     Properties:
-      ServiceName: WELCOME-SERVICE
-      Cluster: !Ref ECSCluster
+      ServiceName: DISCOVERY-WELCOME-SERVICE
+      Cluster: !Ref DiscoveryECSCluster
       LaunchType: FARGATE
       DeploymentConfiguration:
         MaximumPercent: 200
@@ -501,10 +589,10 @@ Resources:
         AwsvpcConfiguration:
           AssignPublicIp: DISABLED
           SecurityGroups:
-          - !Ref ContainerSecurityGroup
+          - !Ref DiscoveryContainerSecurityGroup
           Subnets: !Ref PrivateSubnetList
-      TaskDefinition: !Ref WelcomeTaskDefinition
+      TaskDefinition: !Ref DiscoveryWelcomeTaskDefinition
       LoadBalancers:
-      - ContainerName: WELCOME-CONTAINER
+      - ContainerName: DISCOVERY-WELCOME-CONTAINER
         ContainerPort: 8000
-        TargetGroupArn: !Ref WelcomeTargetGroup
+        TargetGroupArn: !Ref DiscoveryWelcomeTargetGroup

@@ -3,12 +3,12 @@
 ### Build
 ###### Build application and create local image
 ```
-mvn clean package dockerfile:build
+mvn clean package dockerfile:build -Ddocker.repository=<repository_name>
 ```
 
 ###### Build application and push image to remote repository
 ```
-mvn clean package dockerfile:push
+mvn clean package dockerfile:push -Ddocker.repository=<repository_name>
 ```
 
 ### Run
@@ -25,7 +25,7 @@ VM Options: -Dserver.port=8020 -Dmanagement.server.port=8021
 
 Welcome Service
 ```
-VM Options: -Dapp.feign.url=http://localhost:8010/
+VM Options: -Dapp.feign.message.url=http://localhost:8010/api/v1/message -Dapp.feign.random.url=http://localhost:8020/api/v1/random
 ```
 
 ###### docker compose
@@ -37,19 +37,19 @@ docker-compose up -d
 ###### Local
 Message Service
 ```
-http://localhost:8010/message
+http://localhost:8010/api/v1/message/hostname
 http://localhost:8011/actuator/health
 ```
 
 Random Service
 ```
-http://localhost:8020/random
+http://localhost:8020/api/v1/random/number
 http://localhost:8021/actuator/health
 ```
 
 Welcome Service
 ```
-http://localhost:8000/welcome
+http://localhost:8000/api/v1/welcome/message
 http://localhost:8001/actuator/health
 ```
 
@@ -71,7 +71,8 @@ aws cloudformation create-stack --stack-name SERVICE-DISCOVERY-POC --template-bo
 
 ###### Invoke services using ALB
 ```
-http://APP-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/welcome
-http://APP-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/message
-http://APP-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/random
+http://APP-DISCOVERY-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/api/v1/welcome/message
+http://APP-DISCOVERY-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/api/v1/message/hostname
+http://APP-DISCOVERY-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/api/v1/random/number
+http://APP-DISCOVERY-ALB-XXXXXXXXX.us-east-1.elb.amazonaws.com/api/v1/swagger-ui.html
 ```

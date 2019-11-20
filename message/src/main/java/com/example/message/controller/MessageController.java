@@ -10,7 +10,7 @@ import java.net.UnknownHostException;
 
 @RestController
 public class MessageController {
-    @GetMapping(value = "/message")
+    @GetMapping(value = "/hostname")
     public ResponseEntity<String> message() {
         String hostname = getHostname();
         return new ResponseEntity<>(hostname, HttpStatus.OK);
